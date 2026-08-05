@@ -1,0 +1,24 @@
+[workspace]
+members = ["crates/destiny-parser", "crates/destiny-index", "crates/destiny-explore", "crates/destiny-runtime-core", "crates/destiny-definition-api", "crates/destiny-server-framework", "crates/destiny-network", "crates/destiny-storage", "crates/destiny-auth-service", "crates/destiny-inventory-service", "crates/destiny-activity-service", "crates/destiny-world-service", "crates/destiny-server-runtime", "crates/destiny-test-client", "crates/destiny-protocol-analyzer", "crates/destiny-rpcs3-harness", "crates/destiny-client-capture", "crates/destiny-client-adapter", "crates/destiny-rpcs3-validation"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+indicatif = "0.17"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "io-util"] }

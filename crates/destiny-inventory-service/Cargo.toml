@@ -1,0 +1,9 @@
+[package]
+name="destiny-inventory-service"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+destiny-runtime-core={path="../destiny-runtime-core"}
+destiny-storage={path="../destiny-storage"}
+serde.workspace=true
+anyhow.workspace=true

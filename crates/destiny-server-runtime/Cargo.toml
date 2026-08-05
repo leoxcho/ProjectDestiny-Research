@@ -1,0 +1,13 @@
+[package]
+name="destiny-server-runtime"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+destiny-network={path="../destiny-network"}
+destiny-auth-service={path="../destiny-auth-service"}
+destiny-inventory-service={path="../destiny-inventory-service"}
+destiny-activity-service={path="../destiny-activity-service"}
+destiny-world-service={path="../destiny-world-service"}
+destiny-runtime-core={path="../destiny-runtime-core"}
+serde.workspace=true
+tracing.workspace=true

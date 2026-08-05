@@ -1,0 +1,10 @@
+[package]
+name="destiny-server-framework"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+destiny-storage={path="../destiny-storage"}
+destiny-network={path="../destiny-network"}
+serde.workspace=true
+tracing.workspace=true
+

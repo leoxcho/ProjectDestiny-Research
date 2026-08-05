@@ -1,0 +1,8 @@
+[package]
+name="destiny-activity-service"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+destiny-runtime-core={path="../destiny-runtime-core"}
+serde.workspace=true
+anyhow.workspace=true

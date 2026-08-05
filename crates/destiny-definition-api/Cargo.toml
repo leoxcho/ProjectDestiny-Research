@@ -1,0 +1,11 @@
+[package]
+name = "destiny-definition-api"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+anyhow.workspace = true
+destiny-runtime-core={path="../destiny-runtime-core"}
+serde_json.workspace = true
+clap.workspace = true
+axum.workspace = true
+tokio.workspace = true

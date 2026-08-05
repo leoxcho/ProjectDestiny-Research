@@ -1,0 +1,9 @@
+[package]
+name="destiny-rpcs3-validation"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+destiny-test-client={path="../destiny-test-client"}
+destiny-server-runtime={path="../destiny-server-runtime"}
+destiny-runtime-core={path="../destiny-runtime-core"}
+serde.workspace=true

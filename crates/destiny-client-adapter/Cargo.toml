@@ -1,0 +1,10 @@
+[package]
+name="destiny-client-adapter"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+anyhow.workspace=true
+destiny-network={path="../destiny-network"}
+destiny-server-runtime={path="../destiny-server-runtime"}
+destiny-test-client={path="../destiny-test-client"}
+destiny-runtime-core={path="../destiny-runtime-core"}

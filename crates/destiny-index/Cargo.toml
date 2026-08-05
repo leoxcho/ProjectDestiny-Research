@@ -1,0 +1,15 @@
+[package]
+name = "destiny-index"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+destiny-parser = { path = "../destiny-parser" }
+indicatif.workspace = true
+rusqlite.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+walkdir.workspace = true
+

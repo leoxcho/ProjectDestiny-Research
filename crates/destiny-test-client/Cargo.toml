@@ -1,0 +1,13 @@
+[package]
+name="destiny-test-client"
+version.workspace=true
+edition.workspace=true
+[dependencies]
+anyhow.workspace=true
+destiny-server-runtime={path="../destiny-server-runtime"}
+destiny-runtime-core={path="../destiny-runtime-core"}
+destiny-network={path="../destiny-network"}
+destiny-auth-service={path="../destiny-auth-service"}
+destiny-activity-service={path="../destiny-activity-service"}
+destiny-storage={path="../destiny-storage"}
+serde.workspace=true
