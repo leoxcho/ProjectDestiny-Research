@@ -5,4 +5,4 @@ edition.workspace=true
 [dependencies]
 serde.workspace=true
 tracing.workspace=true
-
+hex.workspace=true

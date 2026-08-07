@@ -359,6 +359,7 @@ dependencies = [
 name = "destiny-network"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "serde",
  "tracing",
 ]
@@ -392,6 +393,7 @@ dependencies = [
  "anyhow",
  "clap",
  "destiny-protocol-analyzer",
+ "hex",
  "rusqlite",
  "tokio",
 ]
@@ -436,6 +438,7 @@ dependencies = [
  "destiny-inventory-service",
  "destiny-network",
  "destiny-runtime-core",
+ "destiny-server-framework",
  "destiny-world-service",
  "serde",
  "tracing",

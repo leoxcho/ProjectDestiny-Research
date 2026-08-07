@@ -1,8 +1,58 @@
 //! Capture ingestion and replay storage. Packet contents are opaque evidence.
-use anyhow::Result;use destiny_network::Direction;use rusqlite::{params,Connection};use serde::{Deserialize,Serialize};use std::path::Path;
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct CaptureMetadata{pub source:String,pub client_version:Option<String>,pub notes:String}
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct CapturedPacket{pub session_id:String,pub direction:Direction,pub timestamp_ms:u128,pub payload:Vec<u8>,pub metadata:CaptureMetadata}
-pub fn open(path:impl AsRef<Path>)->Result<Connection>{let c=Connection::open(path)?;c.execute_batch("create table if not exists capture_sessions(id text primary key,source text,client_version text,notes text);create table if not exists captured_packets(id integer primary key,session_id text not null,timestamp integer not null,direction text not null,payload blob not null,metadata text not null);create index if not exists idx_capture_timeline on captured_packets(session_id,timestamp);")?;Ok(c)}
-pub fn record(c:&Connection,p:&CapturedPacket)->Result<i64>{c.execute("insert or ignore into capture_sessions(id,source,client_version,notes) values(?1,?2,?3,?4)",params![p.session_id,p.metadata.source,p.metadata.client_version,p.metadata.notes])?;c.execute("insert into captured_packets(session_id,timestamp,direction,payload,metadata) values(?1,?2,?3,?4,?5)",params![p.session_id,p.timestamp_ms as i64,format!("{:?}",p.direction),p.payload,serde_json::to_string(&p.metadata)?])?;Ok(c.last_insert_rowid())}
-pub fn timeline(c:&Connection,session:&str)->Result<Vec<(i64,String,Vec<u8>)>>{let mut s=c.prepare("select timestamp,direction,payload from captured_packets where session_id=? order by timestamp")?;let rows=s.query_map([session],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;Ok(rows)}
-#[cfg(test)]mod tests{use super::*;#[test]fn records_replayable_packet(){let c=open(":memory:").unwrap();let p=CapturedPacket{session_id:"s".into(),direction:Direction::Unknown,timestamp_ms:1,payload:vec![1,2],metadata:CaptureMetadata{source:"test".into(),client_version:None,notes:"opaque".into()}};record(&c,&p).unwrap();assert_eq!(timeline(&c,"s").unwrap()[0].2,vec![1,2]);}}
+use anyhow::Result;
+use destiny_network::Direction;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureMetadata {
+    pub source: String,
+    pub client_version: Option<String>,
+    pub notes: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapturedPacket {
+    pub session_id: String,
+    pub direction: Direction,
+    pub timestamp_ms: u128,
+    pub payload: Vec<u8>,
+    pub metadata: CaptureMetadata,
+}
+pub fn open(path: impl AsRef<Path>) -> Result<Connection> {
+    let c = Connection::open(path)?;
+    c.execute_batch("create table if not exists capture_sessions(id text primary key,source text,client_version text,notes text);create table if not exists captured_packets(id integer primary key,session_id text not null,timestamp integer not null,direction text not null,payload blob not null,metadata text not null);create index if not exists idx_capture_timeline on captured_packets(session_id,timestamp);")?;
+    Ok(c)
+}
+pub fn record(c: &Connection, p: &CapturedPacket) -> Result<i64> {
+    c.execute("insert or ignore into capture_sessions(id,source,client_version,notes) values(?1,?2,?3,?4)",params![p.session_id,p.metadata.source,p.metadata.client_version,p.metadata.notes])?;
+    c.execute("insert into captured_packets(session_id,timestamp,direction,payload,metadata) values(?1,?2,?3,?4,?5)",params![p.session_id,p.timestamp_ms as i64,format!("{:?}",p.direction),p.payload,serde_json::to_string(&p.metadata)?])?;
+    Ok(c.last_insert_rowid())
+}
+pub fn timeline(c: &Connection, session: &str) -> Result<Vec<(i64, String, Vec<u8>)>> {
+    let mut s=c.prepare("select timestamp,direction,payload from captured_packets where session_id=? order by timestamp")?;
+    let rows = s
+        .query_map([session], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn records_replayable_packet() {
+        let c = open(":memory:").unwrap();
+        let p = CapturedPacket {
+            session_id: "s".into(),
+            direction: Direction::Unknown,
+            timestamp_ms: 1,
+            payload: vec![1, 2],
+            metadata: CaptureMetadata {
+                source: "test".into(),
+                client_version: None,
+                notes: "opaque".into(),
+            },
+        };
+        record(&c, &p).unwrap();
+        assert_eq!(timeline(&c, "s").unwrap()[0].2, vec![1, 2]);
+    }
+}

@@ -3,6 +3,7 @@ name="destiny-server-runtime"
 version.workspace=true
 edition.workspace=true
 [dependencies]
+destiny-server-framework = { path = "../destiny-server-framework" }
 destiny-network={path="../destiny-network"}
 destiny-auth-service={path="../destiny-auth-service"}
 destiny-inventory-service={path="../destiny-inventory-service"}

@@ -1,13 +1,139 @@
 //! Evidence-first packet capture analysis. Unknown bytes are retained verbatim.
-use anyhow::Result; use rusqlite::{params,Connection}; use serde::{Deserialize,Serialize}; use std::path::Path;
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct CapturePacket{pub session_id:String,pub direction:String,pub timestamp_ms:u128,pub payload:Vec<u8>,pub opcode:Option<u16>,pub confidence:String,pub notes:String}
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct FieldBoundary{pub offset:usize,pub size:usize,pub confidence:String,pub notes:String}
-pub fn open_database(path:impl AsRef<Path>)->Result<Connection>{let c=Connection::open(path)?;c.execute_batch("PRAGMA foreign_keys=ON;CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,first_timestamp INTEGER NOT NULL,last_timestamp INTEGER NOT NULL,packet_count INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS opcodes(opcode INTEGER PRIMARY KEY,direction TEXT NOT NULL,payload_size INTEGER,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,session_id TEXT NOT NULL REFERENCES sessions(id),opcode INTEGER,direction TEXT NOT NULL,payload_size INTEGER NOT NULL,timestamp INTEGER NOT NULL,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS fields(id INTEGER PRIMARY KEY,message_id INTEGER NOT NULL REFERENCES messages(id),offset INTEGER NOT NULL,size INTEGER NOT NULL,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS packet_samples(id INTEGER PRIMARY KEY,message_id INTEGER NOT NULL REFERENCES messages(id),payload BLOB NOT NULL);CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);CREATE INDEX IF NOT EXISTS idx_samples_message ON packet_samples(message_id);")?;Ok(c)}
-pub fn ingest(c:&Connection,p:&CapturePacket)->Result<i64>{let ts=p.timestamp_ms as i64;c.execute("INSERT INTO sessions(id,first_timestamp,last_timestamp,packet_count) VALUES(?1,?2,?2,1) ON CONFLICT(id) DO UPDATE SET last_timestamp=excluded.last_timestamp,packet_count=packet_count+1",params![p.session_id,ts])?;if let Some(op)=p.opcode{c.execute("INSERT OR IGNORE INTO opcodes(opcode,direction,payload_size,confidence,notes) VALUES(?1,?2,?3,?4,?5)",params![op,p.direction,p.payload.len() as i64,p.confidence,p.notes])?;}c.execute("INSERT INTO messages(session_id,opcode,direction,payload_size,timestamp,confidence,notes) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![p.session_id,p.opcode,p.direction,p.payload.len() as i64,ts,p.confidence,p.notes])?;let id=c.last_insert_rowid();c.execute("INSERT INTO packet_samples(message_id,payload) VALUES(?1,?2)",params![id,p.payload])?;Ok(id)}
-pub fn hex_view(bytes:&[u8])->String{hex::encode(bytes)}
-pub fn analyze_boundaries(payload:&[u8])->Vec<FieldBoundary>{if payload.is_empty(){vec![]}else{vec![FieldBoundary{offset:0,size:payload.len(),confidence:"unknown".into(),notes:"Opaque payload; no field boundary claimed".into()}]}}
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct PacketFingerprint{pub length:usize,pub digest:String,pub prefix:Vec<u8>}
-#[derive(Debug,Clone,Serialize,Deserialize)]pub struct DiscoveryReport{pub fingerprints:Vec<PacketFingerprint>,pub repeated_offsets:Vec<usize>,pub constant_offsets:Vec<usize>,pub variable_offsets:Vec<usize>,pub candidate_boundaries:Vec<usize>,pub pair_candidates:Vec<(usize,usize)>}
-pub fn fingerprint(p:&[u8])->PacketFingerprint{let digest=format!("len:{} prefix:{}",p.len(),hex_view(&p[..p.len().min(8)]));PacketFingerprint{length:p.len(),digest,prefix:p[..p.len().min(8)].to_vec()}}
-pub fn discover(samples:&[Vec<u8>])->DiscoveryReport{let fingerprints=samples.iter().map(|p|fingerprint(p)).collect();let max=samples.iter().map(Vec::len).max().unwrap_or(0);let mut repeated=vec![];let mut constant=vec![];let mut variable=vec![];for i in 0..max{let vals:Vec<u8>=samples.iter().filter_map(|p|p.get(i).copied()).collect();if vals.len()>1{if vals.windows(2).all(|w|w[0]==w[1]){constant.push(i)}else{variable.push(i)}}if vals.len()>=3&&vals.windows(2).any(|w|w[0]==w[1]){repeated.push(i)}}let mut boundaries=vec![0];for i in 1..max{if variable.contains(&i)&&constant.contains(&(i-1)){boundaries.push(i)}}DiscoveryReport{fingerprints,repeated_offsets:repeated,constant_offsets:constant,variable_offsets:variable,candidate_boundaries:boundaries,pair_candidates:vec![]}}
-#[cfg(test)]mod tests{use super::*;#[test]fn preserves_unknown_packet(){let c=open_database(":memory:").unwrap();let p=CapturePacket{session_id:"s".into(),direction:"client_to_server".into(),timestamp_ms:1,payload:vec![0,1,2],opcode:None,confidence:"unknown".into(),notes:"unmapped".into()};let id=ingest(&c,&p).unwrap();assert_eq!(id,1);assert_eq!(hex_view(&p.payload),"000102");assert_eq!(c.query_row("select count(*) from packet_samples",[],|r|r.get::<_,i64>(0)).unwrap(),1);}}
+use anyhow::Result;
+use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapturePacket {
+    pub session_id: String,
+    pub direction: String,
+    pub timestamp_ms: u128,
+    pub payload: Vec<u8>,
+    pub opcode: Option<u16>,
+    pub confidence: String,
+    pub notes: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldBoundary {
+    pub offset: usize,
+    pub size: usize,
+    pub confidence: String,
+    pub notes: String,
+}
+pub fn open_database(path: impl AsRef<Path>) -> Result<Connection> {
+    let c = Connection::open(path)?;
+    c.execute_batch("PRAGMA foreign_keys=ON;CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,first_timestamp INTEGER NOT NULL,last_timestamp INTEGER NOT NULL,packet_count INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS opcodes(opcode INTEGER PRIMARY KEY,direction TEXT NOT NULL,payload_size INTEGER,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,session_id TEXT NOT NULL REFERENCES sessions(id),opcode INTEGER,direction TEXT NOT NULL,payload_size INTEGER NOT NULL,timestamp INTEGER NOT NULL,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS fields(id INTEGER PRIMARY KEY,message_id INTEGER NOT NULL REFERENCES messages(id),offset INTEGER NOT NULL,size INTEGER NOT NULL,confidence TEXT NOT NULL,notes TEXT NOT NULL);CREATE TABLE IF NOT EXISTS packet_samples(id INTEGER PRIMARY KEY,message_id INTEGER NOT NULL REFERENCES messages(id),payload BLOB NOT NULL);CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);CREATE INDEX IF NOT EXISTS idx_samples_message ON packet_samples(message_id);")?;
+    Ok(c)
+}
+pub fn ingest(c: &Connection, p: &CapturePacket) -> Result<i64> {
+    let ts = p.timestamp_ms as i64;
+    c.execute("INSERT INTO sessions(id,first_timestamp,last_timestamp,packet_count) VALUES(?1,?2,?2,1) ON CONFLICT(id) DO UPDATE SET last_timestamp=excluded.last_timestamp,packet_count=packet_count+1",params![p.session_id,ts])?;
+    if let Some(op) = p.opcode {
+        c.execute("INSERT OR IGNORE INTO opcodes(opcode,direction,payload_size,confidence,notes) VALUES(?1,?2,?3,?4,?5)",params![op,p.direction,p.payload.len() as i64,p.confidence,p.notes])?;
+    }
+    c.execute("INSERT INTO messages(session_id,opcode,direction,payload_size,timestamp,confidence,notes) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![p.session_id,p.opcode,p.direction,p.payload.len() as i64,ts,p.confidence,p.notes])?;
+    let id = c.last_insert_rowid();
+    c.execute(
+        "INSERT INTO packet_samples(message_id,payload) VALUES(?1,?2)",
+        params![id, p.payload],
+    )?;
+    Ok(id)
+}
+pub fn hex_view(bytes: &[u8]) -> String {
+    hex::encode(bytes)
+}
+pub fn analyze_boundaries(payload: &[u8]) -> Vec<FieldBoundary> {
+    if payload.is_empty() {
+        vec![]
+    } else {
+        vec![FieldBoundary {
+            offset: 0,
+            size: payload.len(),
+            confidence: "unknown".into(),
+            notes: "Opaque payload; no field boundary claimed".into(),
+        }]
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacketFingerprint {
+    pub length: usize,
+    pub digest: String,
+    pub prefix: Vec<u8>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveryReport {
+    pub fingerprints: Vec<PacketFingerprint>,
+    pub repeated_offsets: Vec<usize>,
+    pub constant_offsets: Vec<usize>,
+    pub variable_offsets: Vec<usize>,
+    pub candidate_boundaries: Vec<usize>,
+    pub pair_candidates: Vec<(usize, usize)>,
+}
+pub fn fingerprint(p: &[u8]) -> PacketFingerprint {
+    let digest = format!("len:{} prefix:{}", p.len(), hex_view(&p[..p.len().min(8)]));
+    PacketFingerprint {
+        length: p.len(),
+        digest,
+        prefix: p[..p.len().min(8)].to_vec(),
+    }
+}
+pub fn discover(samples: &[Vec<u8>]) -> DiscoveryReport {
+    let fingerprints = samples.iter().map(|p| fingerprint(p)).collect();
+    let max = samples.iter().map(Vec::len).max().unwrap_or(0);
+    let mut repeated = vec![];
+    let mut constant = vec![];
+    let mut variable = vec![];
+    for i in 0..max {
+        let vals: Vec<u8> = samples.iter().filter_map(|p| p.get(i).copied()).collect();
+        if vals.len() > 1 {
+            if vals.windows(2).all(|w| w[0] == w[1]) {
+                constant.push(i)
+            } else {
+                variable.push(i)
+            }
+        }
+        if vals.len() >= 3 && vals.windows(2).any(|w| w[0] == w[1]) {
+            repeated.push(i)
+        }
+    }
+    let mut boundaries = vec![0];
+    for i in 1..max {
+        if variable.contains(&i) && constant.contains(&(i - 1)) {
+            boundaries.push(i)
+        }
+    }
+    DiscoveryReport {
+        fingerprints,
+        repeated_offsets: repeated,
+        constant_offsets: constant,
+        variable_offsets: variable,
+        candidate_boundaries: boundaries,
+        pair_candidates: vec![],
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn preserves_unknown_packet() {
+        let c = open_database(":memory:").unwrap();
+        let p = CapturePacket {
+            session_id: "s".into(),
+            direction: "client_to_server".into(),
+            timestamp_ms: 1,
+            payload: vec![0, 1, 2],
+            opcode: None,
+            confidence: "unknown".into(),
+            notes: "unmapped".into(),
+        };
+        let id = ingest(&c, &p).unwrap();
+        assert_eq!(id, 1);
+        assert_eq!(hex_view(&p.payload), "000102");
+        assert_eq!(
+            c.query_row("select count(*) from packet_samples", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+}

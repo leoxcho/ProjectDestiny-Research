@@ -1,0 +1,31 @@
+# Rust build output
+target/
+
+# macOS files
+.DS_Store
+
+# Environment files
+.env
+
+# Logs
+*.log
+
+# Python files
+__pycache__/
+*.pyc
+
+# Generated databases
+*.db
+
+# Packet captures
+captures/
+
+# Archives
+*.tar.gz
+
+# Local databases
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
